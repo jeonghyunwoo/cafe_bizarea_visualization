@@ -1,0 +1,257 @@
+---
+title: "경영데이터분석론 발표자료"
+subtitle: ""
+author: "빅데이터융합 46기 정현우"
+date: "2018/11/12"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+class: center, middle
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+options(htmltools.dir.version = FALSE)
+library(pacman)
+p_load(tidyverse,leaflet,clipr,scales,data.table,sf)
+cafe<-read_rds('../data/cafe8.rds')
+cafe_area1<-read_rds('../data/cafe_area1.rds')
+relm<-read_rds('../data/relm.rds')
+vi<-read_rds('../data/vi.rds')
+pred<-read_rds('../data/pred.rds')
+source('../R/funcs.R',encoding='UTF-8')
+theme_set(theme_minimal(10,'ng'))
+cf<-read_rds('../data/cf.rds')
+# library(recipes)
+# library(caret)
+# rf<-read_rds('../data/rf.rds')
+# te<-read_rds('../data/te.rds')
+```
+```{r xaringan-themer, include=FALSE}
+library(xaringanthemer)
+style_solarized_dark(
+  code_font_family = "Fira Code",
+  code_font_url    = "https://cdn.rawgit.com/tonsky/FiraCode/1.204/distr/fira_code.css"
+)
+```
+
+### 공공데이터를 활용한 **Cafe** 상권 시각화  
+![korea](d:/proj/public_data/img/korea.jpg)
+
+???
+
+---
+# Why?
+
+- 추후 연구확장을 위한 공공데이터 활용방안 탐색  
+
+# What?
+
+- 카페(스타벅스,이디야,...)를 주제로 지리정보 시각화   
+- 카페상권 매출 영향요인 분석 시도  
+- Interactive presentation 자료 작성  
+
+## 배운것
+- 지리정보 데이터의 이해(경도,위도,shape file)
+- R leaflet, sf 라이브러리: 지리정보 시각화
+- R xaringan 라이브러리: interactive slide
+
+
+---
+# data
+
+data 1.공공데이터포털 www.data.go.kr   
+- 상가업소정보(2018년 9월)  
+- 주요정보: 상호명, 주소, 경도(longitude), 위도(latitude) 등  
+- 상가업종소분류명 '커피전문점/카페/다방'만 추출  
+- size: rows 85528, columns 44
+
+data 2.서울열린데이터광장 data.seoul.go.kr  
+- 서울시 우리마을가게 상권분서비스(프로파일링 데이터)   등
+- 주요정보: 상권명(디지털로32길...), 상권분석정보(연령대별 매출액...)  
+- size: row 1356, columns 83
+
+
+
+---
+class: center, middle
+
+# Part 1.지리정보 시각화  
+
+---
+### 우리나라 카페매장 분포  
+- 총 카페매장 수: 85,528 (2018.9 기준)  
+- 시각화 샘플: 5천건  
+- 브랜드 매장(스타벅스 등)은 대도시 중심으로 분포
+
+
+```{r fig.height=6, fig.width=11, paged.print=FALSE}
+# reg_brand_poly(n=5)
+reg_all(n=5000)
+
+```
+
+
+---
+### 주요 카페브랜드별 매장수    
+- 14개 브랜드 총 매장수: 8,490  
+- 전체 카페 매장수의 약 10%  
+- 매장수 1천개 이상 브랜드: 이디야, 스타벅스 
+```{r }
+theme_set(theme_minimal(10,'ng'))
+filter(cafe,brandyn=='브랜드') %>% 
+  count(brand) %>% 
+  rename(매장수=n) %>% 
+  ggplot(aes(reorder(brand,매장수),매장수))+
+  geom_col(aes(fill=매장수))+
+  geom_text(aes(label=comma(매장수)),size=3,family='ng',fontface='bold',
+            hjust=1,color='white')+
+  coord_flip()+
+  labs(x='브랜드')+
+  theme(legend.position = 'none',
+        axis.text = element_text(size=12))
+```
+
+
+---
+### 주요 카페브랜드별 수도권 비중  
+```{r}
+filter(cafe,brandyn=='브랜드') %>% 
+  group_by(brand) %>% 
+  summarise(metro = sum(ifelse(시도 %in% c('서울','경기','인천'),1,0)),
+            total = n(),
+            met_rt = metro/total) %>% 
+  ggplot(aes(reorder(brand,met_rt),met_rt))+
+  geom_col(aes(fill=met_rt))+
+  geom_text(aes(label=percent(met_rt)),size=3,family='ng',
+            hjust=1,color='white')+
+  expand_limits(y=c(0,1.1))+
+  coord_flip()+
+  labs(x='브랜드',y='수도권 비중')+
+  theme(legend.position='none',
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12))
+        
+```
+
+
+---
+### 카페브랜드별 커버리지  
+- 커버리지가 가장 넓은 브랜드: 카페베네 --> 백령도  
+- 가장 멀리 있는 카페: 독도사랑카페  
+```{r fig.height=6, fig.width=11, paged.print=FALSE}
+# reg_brand_poly_nopts()
+reg_brand_poly_nopts()
+```
+
+
+---
+### 카페브랜드별 수도권 커버리지  
+  
+```{r fig.height=6, fig.width=11, paged.print=FALSE}
+# reg_brand_poly_nopts()
+reg_brand_poly('(서울|경기|인천)',10)
+```
+---
+class: center, middle
+
+# Part 2.상권정보 분석  
+
+---
+### 서울시 카페(커피음료) 상권 시각화  
+```{r fig.height=6, fig.width=11}
+ggplot(relm)+
+  geom_sf(aes(fill=thsmon_selng_amt/100000000))+
+  scale_fill_viridis_c('당월매출(억)')
+```
+
+
+  
+  
+---
+### 서울시 카페(커피음료)상권별 매출액   
+- 원사이즈 및 색깔: 2018.7 매출액 비례  
+```{r fig.height=6, fig.width=10}
+biz_amt(10)
+```
+
+---
+### 매출액기준 상위 1% 카페(커피음료)상권  
+- 매출액(억) 퍼센타일: `r round(quantile(cafe_area1$thsmon_selng_amt,probs=c(.5,.75,.9,.99))/100000000,2)`
+```{r fig.height=6, fig.width=10}
+biz_amt(3.2)
+```
+
+
+
+---
+### 매출 5억이상 카페(커피음료) 상권 
+```{r fig.height=6, fig.width=10}
+biz_amt(5)
+```
+
+
+---
+### 매출액 영향요인 분석  
+`randomForest`를 이용하여 variable importance 산출  
+- target을 매출액 상위 10%여부로 설정-->case imbalance  
+- case imbalance 반영하기 위해 `Accuracy`대신 `Kappa`를 이용하여 모형적합  
+```{r, eval=FALSE, echo=TRUE}
+# data split
+spl<-cafe_area1 %>% select(target,trdar_cd_nm,mdwk_selng_rate:stor_co) %>% 
+  initial_split(prop=.7,strata='target')
+tr<-training(spl);te<-testing(spl)
+# preprocess
+rec<-recipe(tr) %>% 
+  add_role(target,new_role='outcome') %>% 
+  add_role(trdar_cd_nm,new_role='id variable') %>% 
+  add_role(-target,-trdar_cd_nm,new_role='predictor') %>% 
+  # 상관계수 0.8 이상인 항목 제거 
+  step_corr(all_predictors(),threshold = .8) 
+# train
+ctrl<-trainControl(method='cv',number=5)
+rf<-train(x=rec, data=tr, method='rf',
+          tuneLength=5,
+          trControl = ctrl,
+          metric='Kappa')  
+
+```
+
+
+
+--- 
+### 모형 검증
+- Kappa: 0.84  
+![confmat](d:/proj/public_data/img/confusionMatrix.png)
+
+
+
+
+
+---
+### 매출액 영향요인 분석  
+- 상위 10개 항목  
+```{r}
+vi %>% 
+  top_n(10,Overall) %>% 
+  ggplot(aes(reorder(컬럼한글명,Overall),Overall))+
+  geom_col(fill='steelblue')+
+  labs(x='',y='importance')+
+  coord_flip()+
+  theme(axis.text = element_text(size=12))
+
+```
+
+
+---
+class: center, middle
+
+# 감사합니다 
+
